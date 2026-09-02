@@ -1,0 +1,17 @@
+{
+  "name": "lab-pdf-parser",
+  "version": "1.0.0",
+  "description": "Hybrid parser for lab report PDFs: known-format parsers first, AI extraction fallback for anything else.",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "multer": "^2.3.0",
+    "pdf-parse": "^2.4.5"
+  }
+}
