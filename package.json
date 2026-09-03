@@ -12,8 +12,7 @@
   },
   "dependencies": {
     "dotenv": "^16.4.5",
-    "pdf-parse": "^2.4.5",
-    "pdfjs-dist": "^4.10.38"
+    "pdfjs-dist": "^5.4.624"
   },
   "engines": {
     "node": ">=18"
