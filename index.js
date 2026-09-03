@@ -18,6 +18,7 @@ function parseArgs(argv) {
   const args = {
     verify: false,
     out: null,
+    force: false,
     input: null
   };
 
@@ -26,14 +27,49 @@ function parseArgs(argv) {
 
     if (a === "--verify" || a === "-v") {
       args.verify = true;
+    } else if (a === "--force" || a === "-f") {
+      args.force = true;
     } else if (a === "--out" || a === "-o") {
       args.out = argv[++i];
+      if (!args.out) {
+        throw new Error("--out requires a path argument");
+      }
     } else if (!args.input) {
       args.input = a;
+    } else {
+      // A second positional argument was given — fail loudly instead
+      // of silently dropping it.
+      throw new Error(
+        `Unexpected extra argument: "${a}". Only one input PDF is supported per run.`
+      );
     }
   }
 
   return args;
+}
+
+/**
+ * ============================================================
+ * Validate the input file exists and looks like a PDF
+ * ============================================================
+ */
+async function validateInputFile(inputPath) {
+  let stat;
+  try {
+    stat = await fs.stat(inputPath);
+  } catch {
+    throw new Error(`Input file not found: ${inputPath}`);
+  }
+
+  if (!stat.isFile()) {
+    throw new Error(`Input path is not a file: ${inputPath}`);
+  }
+
+  if (path.extname(inputPath).toLowerCase() !== ".pdf") {
+    console.warn(
+      `Warning: "${inputPath}" does not have a .pdf extension. Continuing anyway.`
+    );
+  }
 }
 
 /**
@@ -47,7 +83,8 @@ async function main() {
   const {
     input,
     verify,
-    out
+    out,
+    force
   } = parseArgs(argv);
 
   /**
@@ -57,11 +94,12 @@ async function main() {
    */
   if (!input) {
     console.error(
-      "Usage: node index.js <path-to-pdf> [--out output.json] [--verify]\n\n" +
+      "Usage: node index.js <path-to-pdf> [--out output.json] [--verify] [--force]\n\n" +
       "  --verify    Run the extracted data through Gemini for verification\n" +
       "              (requires GEMINI_API_KEY in .env)\n\n" +
       "  --out       Output JSON path\n" +
-      "              (default: <input-name>.json next to the input file)"
+      "              (default: <input-name>.json next to the input file)\n\n" +
+      "  --force     Overwrite the output file if it already exists"
     );
 
     process.exit(1);
@@ -77,6 +115,26 @@ async function main() {
   const outputPath = out
     ? path.resolve(out)
     : inputPath.replace(/\.pdf$/i, "") + ".json";
+
+  await validateInputFile(inputPath);
+
+  /**
+   * ----------------------------------------------------------
+   * Guard against silently clobbering an existing output file
+   * ----------------------------------------------------------
+   */
+  if (!force) {
+    try {
+      await fs.access(outputPath);
+      console.error(
+        `Output file already exists: ${outputPath}\n` +
+        `Re-run with --force to overwrite, or use --out to choose a different path.`
+      );
+      process.exit(1);
+    } catch {
+      // File doesn't exist — safe to proceed.
+    }
+  }
 
   console.log(`Reading: ${inputPath}`);
 
@@ -95,10 +153,18 @@ async function main() {
    */
   const extraction = await extractPdf(inputPath);
 
+  if (!extraction || typeof extraction !== "object") {
+    throw new Error(
+      "extractPdf() returned an unexpected result (expected an object)."
+    );
+  }
+
   /**
    * ----------------------------------------------------------
    * Display extraction summary
    * ----------------------------------------------------------
+   * Defensive against shape changes in extractPdf's output —
+   * missing fields degrade to 0 instead of throwing.
    */
   const pageCount =
     extraction.metadata?.pageCount ?? 0;
@@ -124,7 +190,7 @@ async function main() {
       ? Object.values(extraction.entities)
           .reduce(
             (total, values) =>
-              total + values.length,
+              total + (Array.isArray(values) ? values.length : 0),
             0
           )
       : 0;
@@ -217,7 +283,7 @@ async function main() {
 main().catch((err) => {
   console.error(
     "Fatal error:",
-    err
+    err.message ?? err
   );
 
   process.exit(1);
