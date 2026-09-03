@@ -9,13 +9,11 @@ import { verifyWithGemini } from "./lib/geminiVerifier.js";
 
 dotenv.config();
 
-
 /**
  * ============================================================
  * Parse command-line arguments
  * ============================================================
  */
-
 function parseArgs(argv) {
   const args = {
     verify: false,
@@ -28,13 +26,9 @@ function parseArgs(argv) {
 
     if (a === "--verify" || a === "-v") {
       args.verify = true;
-    }
-
-    else if (a === "--out" || a === "-o") {
+    } else if (a === "--out" || a === "-o") {
       args.out = argv[++i];
-    }
-
-    else if (!args.input) {
+    } else if (!args.input) {
       args.input = a;
     }
   }
@@ -42,15 +36,12 @@ function parseArgs(argv) {
   return args;
 }
 
-
 /**
  * ============================================================
  * Main
  * ============================================================
  */
-
 async function main() {
-
   const argv = process.argv.slice(2);
 
   const {
@@ -59,21 +50,16 @@ async function main() {
     out
   } = parseArgs(argv);
 
-
   /**
    * ----------------------------------------------------------
    * Validate input
    * ----------------------------------------------------------
    */
-
   if (!input) {
-
     console.error(
       "Usage: node index.js <path-to-pdf> [--out output.json] [--verify]\n\n" +
-
       "  --verify    Run the extracted data through Gemini for verification\n" +
       "              (requires GEMINI_API_KEY in .env)\n\n" +
-
       "  --out       Output JSON path\n" +
       "              (default: <input-name>.json next to the input file)"
     );
@@ -81,43 +67,39 @@ async function main() {
     process.exit(1);
   }
 
-
   /**
    * ----------------------------------------------------------
    * Resolve paths
    * ----------------------------------------------------------
    */
+  const inputPath = path.resolve(input);
 
-  const inputPath =
-    path.resolve(input);
+  const outputPath = out
+    ? path.resolve(out)
+    : inputPath.replace(/\.pdf$/i, "") + ".json";
 
-  const outputPath =
-    out
-      ? path.resolve(out)
-      : inputPath.replace(/\.pdf$/i, "") + ".json";
-
-
-  console.log(
-    `Reading: ${inputPath}`
-  );
-
+  console.log(`Reading: ${inputPath}`);
 
   /**
    * ----------------------------------------------------------
    * Deterministic PDF extraction
    * ----------------------------------------------------------
+   *
+   * PDF.js is responsible for extracting:
+   * - text
+   * - page information
+   * - positional information
+   * - table structure
+   *
+   * Gemini is NOT used here.
    */
-
-  const extraction =
-    await extractPdf(inputPath);
-
+  const extraction = await extractPdf(inputPath);
 
   /**
    * ----------------------------------------------------------
    * Display extraction summary
    * ----------------------------------------------------------
    */
-
   const pageCount =
     extraction.metadata?.pageCount ?? 0;
 
@@ -133,7 +115,9 @@ async function main() {
       : 0;
 
   const tableCount =
-    extraction.document?.tables?.length ?? 0;
+    extraction.document?.tables
+      ? Object.keys(extraction.document.tables).length
+      : 0;
 
   const entityCount =
     extraction.entities
@@ -145,7 +129,6 @@ async function main() {
           )
       : 0;
 
-
   console.log(
     `Extracted ${pageCount} page(s), ` +
     `${paragraphCount} paragraph(s), ` +
@@ -155,17 +138,14 @@ async function main() {
     `${entityCount} entit${entityCount === 1 ? "y" : "ies"}.`
   );
 
-
   /**
    * ----------------------------------------------------------
    * Build final result
    * ----------------------------------------------------------
    */
-
   const result = {
     ...extraction
   };
-
 
   /**
    * ----------------------------------------------------------
@@ -174,9 +154,7 @@ async function main() {
    *
    * Gemini is ONLY used after deterministic extraction.
    */
-
   if (verify) {
-
     const model =
       process.env.GEMINI_MODEL ||
       "gemini-3.6-flash";
@@ -186,31 +164,24 @@ async function main() {
     );
 
     try {
-
       const verification =
         await verifyWithGemini(extraction);
 
       result.verification =
         verification;
 
-
       if (verification.ok) {
-
         console.log(
           `Verification complete — ` +
           `verified=${verification.verified}, ` +
           `confidence=${verification.confidence}`
         );
-
       } else {
-
         console.log(
           "Verification returned an invalid or empty response."
         );
       }
-
     } catch (err) {
-
       console.error(
         `Verification failed: ${err.message}`
       );
@@ -222,34 +193,28 @@ async function main() {
     }
   }
 
-
   /**
    * ----------------------------------------------------------
    * Write JSON output
    * ----------------------------------------------------------
    */
-
   await fs.writeFile(
     outputPath,
     JSON.stringify(result, null, 2),
     "utf-8"
   );
 
-
   console.log(
     `Wrote: ${outputPath}`
   );
 }
-
 
 /**
  * ============================================================
  * Error handling
  * ============================================================
  */
-
 main().catch((err) => {
-
   console.error(
     "Fatal error:",
     err
